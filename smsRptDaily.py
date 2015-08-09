@@ -15,6 +15,11 @@ patterns ={
             1:"'^(86){0,1}((13[0-2])|(15[56])|(18[56])|(145))'",
             2:"'^(86){0,1}((133)|(153)|(18[019])|(177))'"
             }
+charges = {
+            'fjdx':[[20, 0.6], 0.035],
+            'yzzy':[[10, 0.3], 0.036],
+            'yw':[[10, 0.3], 0.040]
+            }
 
 def _withinDayCond(field, date):
     return field+" > str_to_date('"+date+" 00:00:00','%Y-%m-%d %H:%i:%s') and "+field+" < str_to_date('"+date+" 23:59:59','%Y-%m-%d %H:%i:%s')"
@@ -95,12 +100,10 @@ def printXls(table, style, proxyData, proxySums, ispSums, total):
 if __name__ == '__main__':
     proxyData = {}
     file = xlwt.Workbook(encoding='utf-8')
-    style = xlwt.easyxf()
-    aa = xlwt.Alignment()
-    aa.horz = xlwt.Alignment.HORZ_CENTER
-    aa.vert = xlwt.Alignment.VERT_CENTER
-    style.alignment = aa
+    style = xlwt.easyxf('align: wrap on, vert centre, horiz center')
     table = file.add_sheet('日报', cell_overwrite_ok=True)
+    for i in range(255):
+        table.col(i).width = 0x0d00 + 7
     # dbConn = MySQLdb.connect(host="221.228.209.13", user="mob_DB", passwd="svb7Ml8+Oc4", db="mobcall", port=6301, charset="utf8")
     # cursor = dbConn.cursor()
     # gather(cursor, 'sms_status_report', proxyData)
