@@ -4,9 +4,10 @@ __author__ = 'Administrator'
 import MySQLdb
 import datetime
 import xlwt
+import copy
 
 shorts = {'yzzy':'宇宙知音', 'fjdx':"福建电信", 'gzyd':'广州移动',
-                  'dgdx':'东莞电信', 'yw':'运维', 'gzdx':'广州电信', 'jsyd':'江苏移动'}
+                  'dgdx':'东莞电信', 'yw':'运维(营销)', 'gzdx':'广州电信', 'jsyd':'江苏移动'}
 channels = {10:['yw', [1]], 11:['gzdx', [2]], 12:['gzyd', [0]], 13:['yzzy', [2]], 14:['yzzy', [0, 2]],
             15:['yzzy', [0]], 16:['fjdx', [0, 1, 2]], 17:['dgdx', [2]], 18:['jsyd', [0, 2]]}
 date = str(datetime.date.today() + datetime.timedelta(days =-1))
@@ -68,8 +69,135 @@ def compute(proxyData):
         total += value
     return proxySums, ispSums, total
 
+def _tProxySums(proxyData):
+    #proxySums
+    # {
+    # 'fjdx':
+    #   {
+    #   tc:{sum:10, sent:6, nSent:4, fee:0.6},
+    #   nTc:{sent:2, unitPrize:0.035, fee:0.07},
+    #   0:{sent:6},
+    #   1:{sent:0},
+    #   2:{sent:3},
+    #   total:{sent:12, fee:0.13
+    #   }
+    # }
+    # tProxyData = {'fjdx':{0:6, 2:3}, 'yzzy':{1:8}, 'yw':{1:4}}
+    charges = {
+        'fjdx':[[20, 0.6], 0.035],
+        'yzzy':[[10, 0.3], 0.036],
+        'yw':[[0, 0], 0.040]
+        }
+    proxySums = {}
+    for key, value in charges.items():
+        tc = {}
+        tc['sum'] = value[0][0]
+        if proxyData.get(key):
+            tSent = sum(proxyData[key].values())
+        else:
+            tSent = 0
+        if tSent <= tc['sum']:
+            tc['sent'] = tSent
+        else:
+            tc['sent'] = tc['sum']
+        tc['nSent'] = tc['sum'] - tc['sent']
+        tc['fee'] = charges[key][0][1]
+        proxySums[key] = {}
+        proxySums[key]['tc'] = tc
 
-    
+        nTc = {}
+        if tSent > tc['sum']:
+            nTc['sent'] = tSent - tc['sum']
+        else:
+            nTc['sent'] = 0
+        nTc['unitPrize'] = charges[key][1]
+        nTc['fee'] = nTc['sent'] * nTc['unitPrize']
+        proxySums[key]['nTc'] = nTc
+
+        for i in range(3):
+            proxySums[key][i] = {}
+            proxySums[key][i]['sent'] = 0
+        if proxyData.get(key):
+            for key1, value1 in proxyData[key].items():
+                proxySums[key][key1]['sent'] += value1
+
+        total = {}
+        total['sent'] = proxySums[key]['tc']['sent'] + proxySums[key]['nTc']['sent']
+        total['fee'] = proxySums[key]['tc']['fee'] + proxySums[key]['nTc']['fee']
+        proxySums[key]['total'] = total
+    return proxySums
+
+def tCompute(proxyData):
+    proxySums = _tProxySums(proxyData)
+    #just copy the data structure
+    tSums = copy.deepcopy(proxySums[tuple(proxySums.keys())[0]])
+    for key, value in proxySums.items():
+        for key1, value1 in value.items():
+            for key2, value2 in value1.items():
+                tSums[key1][key2] = 0
+    for key, value in proxySums.items():
+        for key1, value1 in value.items():
+            for key2, value2 in value1.items():
+                tSums[key1][key2] += value2
+    return proxySums, tSums
+
+def tPrint(table, style, tProxySums, tSums):
+    texts = {
+        'tc':['sum', 'sent', 'nSent', 'fee'],
+        'nTc':['sent', 'unitPrize', 'fee'],
+        0:['sent'],
+        1:['sent'],
+        2:['sent'],
+        'total':['sent', 'fee']
+        }
+    seqs = ['tc', 'nTc', 0, 1, 2, 'total']
+    gaps = [1, 1, 0, 0, 1]
+    chinese = {'sent':'已发', 'nSent':'未发', 'sum':'总量', 'fee':'费用', 'unitPrize':'单价',
+               'tc':'套餐', 'nTc':'套餐外', 0:'移动', 1:'联通', 2:'电信', 'total':'合计'}
+    row = 1
+    for i in range(len(seqs)):
+        table.write_merge(row, row+len(texts[seqs[i]])-1, 0, 0, chinese[seqs[i]], style)
+        seqs1 = texts[seqs[i]]
+        for j in range(len(seqs1)):
+            table.write(row+j, 1, chinese[seqs1[j]], style)
+        if i < len(seqs)-1:
+            row += len(texts[seqs[i]]) + gaps[i]
+    #proxySums
+    # {
+    # 'fjdx':
+    #   {
+    #   tc:{sum:10, sent:6, nSent:4, fee:0.6},
+    #   nTc:{sent:2, unitPrize:0.035, fee:0.07},
+    #   0:{sent:6},
+    #   1:{sent:0},
+    #   2:{sent:3},
+    #   total:{sent:12, fee:0.13
+    #   }
+    # }
+    col = 2
+    for key, value in tProxySums.items():
+        row = 1
+        table.write(0, col, shorts[key], style)
+        tProxySum = tProxySums[key]
+        for i in range(len(seqs)):
+            seqs1 = texts[seqs[i]]
+            for j in range(len(seqs1)):
+                table.write(row+j, col, tProxySum[seqs[i]][seqs1[j]], style)
+            if i < len(seqs)-1:
+                row += len(texts[seqs[i]]) + gaps[i]
+        col += 1
+
+        table.write(0, col, '合计', style)
+        row = 1
+        for i in range(len(seqs)):
+            seqs1 = texts[seqs[i]]
+            for j in range(len(seqs1)):
+                if seqs1[j] != 'unitPrize':
+                    table.write(row+j, col, tSums[seqs[i]][seqs1[j]], style)
+            if i < len(seqs)-1:
+                row += len(texts[seqs[i]]) + gaps[i]
+
+
 
 
 def printXls(table, style, proxyData, proxySums, ispSums, total):
@@ -102,8 +230,10 @@ if __name__ == '__main__':
     file = xlwt.Workbook(encoding='utf-8')
     style = xlwt.easyxf('align: wrap on, vert centre, horiz center')
     table = file.add_sheet('日报', cell_overwrite_ok=True)
+    table1 = file.add_sheet('1号至今', cell_overwrite_ok=True)
     for i in range(255):
         table.col(i).width = 0x0d00 + 7
+        table1.col(i).width = 0x0d00 + 7
     # dbConn = MySQLdb.connect(host="221.228.209.13", user="mob_DB", passwd="svb7Ml8+Oc4", db="mobcall", port=6301, charset="utf8")
     # cursor = dbConn.cursor()
     # gather(cursor, 'sms_status_report', proxyData)
@@ -111,6 +241,11 @@ if __name__ == '__main__':
     proxyData = {'fjdx':{0: 3, 2:1}, 'yzzy':{1:2}}
     proxySums, ispSums, total = compute(proxyData)
     printXls(table, style, proxyData, proxySums, ispSums, total)
+
+    tProxyData = {'fjdx':{0:6, 2:3}, 'yzzy':{1:12}, 'yw':{1:4}}
+    tProxySums, tSums = tCompute(tProxyData)
+    tPrint(table1, style, tProxySums, tSums)
+
     file.save(r'C:\\Users\\xjt\\Desktop\\短信日报' + str(date) + '.xls')
     # dbConn.commit()
     # cursor.close()
