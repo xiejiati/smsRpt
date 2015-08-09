@@ -5,27 +5,25 @@ import MySQLdb
 import datetime
 import xlwt
 import copy
+import time
 
 shorts = {'yzzy':'宇宙知音', 'fjdx':"福建电信", 'gzyd':'广州移动',
                   'dgdx':'东莞电信', 'yw':'运维(营销)', 'gzdx':'广州电信', 'jsyd':'江苏移动'}
 channels = {10:['yw', [1]], 11:['gzdx', [2]], 12:['gzyd', [0]], 13:['yzzy', [2]], 14:['yzzy', [0, 2]],
             15:['yzzy', [0]], 16:['fjdx', [0, 1, 2]], 17:['dgdx', [2]], 18:['jsyd', [0, 2]]}
-date = str(datetime.date.today() + datetime.timedelta(days =-1))
 patterns ={
             0:"'^(86){0,1}((13[4-9])|(15([0-2]|[7-9]))|(18([2-4]|[78]))|(147)|(178))'",
             1:"'^(86){0,1}((13[0-2])|(15[56])|(18[56])|(145))'",
             2:"'^(86){0,1}((133)|(153)|(18[019])|(177))'"
             }
-charges = {
-            'fjdx':[[20, 0.6], 0.035],
-            'yzzy':[[10, 0.3], 0.036],
-            'yw':[[10, 0.3], 0.040]
-            }
 
 def _withinDayCond(field, date):
     return field+" > str_to_date('"+date+" 00:00:00','%Y-%m-%d %H:%i:%s') and "+field+" < str_to_date('"+date+" 23:59:59','%Y-%m-%d %H:%i:%s')"
 
-def gather(cursor, database, proxyData):
+def _withinDayCondPeriod(field, fromD, toD):
+    return field+" > str_to_date('"+fromD+" 00:00:00','%Y-%m-%d %H:%i:%s') and "+field+" < str_to_date('"+toD+" 23:59:59','%Y-%m-%d %H:%i:%s')"
+
+def gather(cursor, database, date, proxyData):
     #proxyData={'fjdx':{0: 1000, 2:100}}
     sql = "select distinct channel  from "+ database +" where "+_withinDayCond("reqTime", date)+";"
     cursor.execute(sql)
@@ -47,6 +45,36 @@ def gather(cursor, database, proxyData):
             ispNums = {}
             for i in isps:
                 sql = "select count(*)  from "+database+" where channel="+str(row[0])+" and "+_withinDayCond("reqTime", date)+" and resCode="+rightCode+" and mobile regexp "+patterns[i]+";"
+                cursor.execute(sql)
+                ispNums[i] = cursor.fetchone()[0]
+            proxyData[channels[row[0]][0]] = ispNums
+
+def gatherDays(cursor, database, proxyData, toDate, fromDate=''):
+    #proxyData={'fjdx':{0: 1000, 2:100}}
+    if fromDate == '':
+        t = time.strptime(toDate, '%Y-%m')
+        y,m = t[0:2]
+        fromDate = str(datetime.date(y,m))+'-01'
+    sql = "select distinct channel  from "+ database +" where "+_withinDayCondPeriod("reqTime", fromDate, toDate)+";"
+    cursor.execute(sql)
+    results = cursor.fetchall()
+    for row in results:
+        isps = channels[row[0]][1]
+        rightCode = "'DELIVRD'"
+        if row[0] == 16:
+            rightCode = '1'
+        #proxyData['宇宙知音'] = {0: 88025L, 2:4455L}
+        #speed up the sql if 1
+        if len(isps) == 1:
+            ispNum = {}
+            sql = "select count(*)  from "+database+" where channel="+str(row[0])+" and "+_withinDayCondPeriod("reqTime", fromDate, toDate)+" and resCode="+rightCode+";"
+            cursor.execute(sql)
+            ispNum[isps[0]] = cursor.fetchone()[0]
+            proxyData[channels[row[0]][0]] = ispNum
+        else:
+            ispNums = {}
+            for i in isps:
+                sql = "select count(*)  from "+database+" where channel="+str(row[0])+" and "+_withinDayCondPeriod("reqTime", fromDate, toDate)+" and resCode="+rightCode+" and mobile regexp "+patterns[i]+";"
                 cursor.execute(sql)
                 ispNums[i] = cursor.fetchone()[0]
             proxyData[channels[row[0]][0]] = ispNums
@@ -198,8 +226,6 @@ def tPrint(table, style, tProxySums, tSums):
                 row += len(texts[seqs[i]]) + gaps[i]
 
 
-
-
 def printXls(table, style, proxyData, proxySums, ispSums, total):
     cols = ['移动', '联通', '电信', '合计']
     row = 1
@@ -227,6 +253,8 @@ def printXls(table, style, proxyData, proxySums, ispSums, total):
 
 if __name__ == '__main__':
     proxyData = {}
+    tProxyData = {}
+    date = str(datetime.date.today() + datetime.timedelta(days =-1))
     file = xlwt.Workbook(encoding='utf-8')
     style = xlwt.easyxf('align: wrap on, vert centre, horiz center')
     table = file.add_sheet('日报', cell_overwrite_ok=True)
@@ -236,12 +264,14 @@ if __name__ == '__main__':
         table1.col(i).width = 0x0d00 + 7
     # dbConn = MySQLdb.connect(host="221.228.209.13", user="mob_DB", passwd="svb7Ml8+Oc4", db="mobcall", port=6301, charset="utf8")
     # cursor = dbConn.cursor()
-    # gather(cursor, 'sms_status_report', proxyData)
-    # gather(cursor, 'sms_report_char', proxyData)
+    # gather(cursor, 'sms_status_report', date, proxyData)
+    # gather(cursor, 'sms_report_char', date, proxyData)
     proxyData = {'fjdx':{0: 3, 2:1}, 'yzzy':{1:2}}
     proxySums, ispSums, total = compute(proxyData)
     printXls(table, style, proxyData, proxySums, ispSums, total)
 
+    #gatherDays(cursor, 'sms_status_report', tProxyData, date)
+    #gatherDays(cursor, 'sms_report_char', tProxyData, date)
     tProxyData = {'fjdx':{0:6, 2:3}, 'yzzy':{1:12}, 'yw':{1:4}}
     tProxySums, tSums = tCompute(tProxyData)
     tPrint(table1, style, tProxySums, tSums)
