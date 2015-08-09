@@ -1,13 +1,14 @@
-#coding=gbk
+#coding=utf8
 __author__ = 'Administrator'
 
 import MySQLdb
 import datetime
+import xlwt
 
-shorts = {'yzzy':'”Ó÷Ê÷™“Ù', 'fjdx':"∏£Ω®µÁ–≈", 'gzyd':'π„÷›“∆∂Ø',
-                  'dgdx':'∂´›∏µÁ–≈', 'yw':'‘ÀŒ¨', 'gzdx':'π„÷›µÁ–≈', 'jsyd':'Ω≠À’“∆∂Ø'}
+shorts = {'yzzy':'ÂÆáÂÆôÁü•Èü≥', 'fjdx':"Á¶èÂª∫Áîµ‰ø°", 'gzyd':'ÂπøÂ∑ûÁßªÂä®',
+                  'dgdx':'‰∏úËéûÁîµ‰ø°', 'yw':'ËøêÁª¥', 'gzdx':'ÂπøÂ∑ûÁîµ‰ø°', 'jsyd':'Ê±üËãèÁßªÂä®'}
 channels = {10:['yw', [1]], 11:['gzdx', [2]], 12:['gzyd', [0]], 13:['yzzy', [2]], 14:['yzzy', [0, 2]],
-            15:['yzzy', [0]], 16:['fjdx', [0, 2]], 17:['dgdx', [2]], 18:['jsyd', [0, 2]]}
+            15:['yzzy', [0]], 16:['fjdx', [0, 1, 2]], 17:['dgdx', [2]], 18:['jsyd', [0, 2]]}
 date = str(datetime.date.today() + datetime.timedelta(days =-1))
 patterns ={
             0:"'^(86){0,1}((13[4-9])|(15([0-2]|[7-9]))|(18([2-4]|[78]))|(147)|(178))'",
@@ -28,7 +29,7 @@ def gather(cursor, database, proxyData):
         rightCode = "'DELIVRD'"
         if row[0] == 16:
             rightCode = '1'
-        #proxyData['”Ó÷Ê÷™“Ù'] = {0: 88025L, 2:4455L}
+        #proxyData['ÂÆáÂÆôÁü•Èü≥'] = {0: 88025L, 2:4455L}
         #speed up the sql if 1
         if len(isps) == 1:
             ispNum = {}
@@ -44,8 +45,9 @@ def gather(cursor, database, proxyData):
                 ispNums[i] = cursor.fetchone()[0]
             proxyData[channels[row[0]][0]] = ispNums
 
+
 def compute(proxyData):
-    #proxySums
+    #proxySums {'fjdx': 3, 'yzzy': 2}
     proxySums = {}
     for key, value in proxyData.items():
         proxySums[key] = 0
@@ -56,27 +58,59 @@ def compute(proxyData):
     for value in proxyData.values():
         for key1, value1 in value.items():
             ispSums[key1] += value1
-    return proxySums, ispSums
+    total = 0
+    for value in ispSums.values():
+        total += value
+    return proxySums, ispSums, total
 
 
     
 
 
-def printXls():
-    pass
+def printXls(table, style, proxyData, proxySums, ispSums, total):
+    cols = ['ÁßªÂä®', 'ËÅîÈÄö', 'Áîµ‰ø°', 'ÂêàËÆ°']
+    row = 1
+    #table.write_merge(0, 3, 1, 2, 'a', style)
+    #proxyData = {'fjdx':{0: 3, 2:1}, 'yzzy':{1:2}}
+    #proxySums {'fjdx': 3, 'yzzy': 2}
+    #ispSums = {0:0, 1:0, 2:0}
+    for col in cols:
+        table.write(row, 0, col, style)
+        row += 1
+    col = 1
+    for key, value in proxyData.items():
+        table.write(0, col, shorts[key], style)
+        for key1, value1 in value.items():
+            table.write(key1+1, col, value1, style)
+        table.write(4, col, proxySums[key], style)
+        col += 1
+    table.write(0, col, 'ÂêàËÆ°', style)
+    for key, value in ispSums.items():
+        table.write(key+1, col, value, style)
+    table.write(4, col, total, style)
+
 
 
 
 if __name__ == '__main__':
     proxyData = {}
-    dbConn = MySQLdb.connect(host="221.228.209.13", user="mob_DB", passwd="svb7Ml8+Oc4", db="mobcall", port=6301, charset="utf8")
-    cursor = dbConn.cursor()
-    gather(cursor, 'sms_status_report', proxyData)
-    gather(cursor, 'sms_report_char', proxyData)
-    proxySums, ispSums = compute(proxyData)
-    print proxySums, ispSums, proxyData
-    dbConn.commit()
-    cursor.close()
-    dbConn.close()
+    file = xlwt.Workbook(encoding='utf-8')
+    style = xlwt.easyxf()
+    aa = xlwt.Alignment()
+    aa.horz = xlwt.Alignment.HORZ_CENTER
+    aa.vert = xlwt.Alignment.VERT_CENTER
+    style.alignment = aa
+    table = file.add_sheet('Êó•Êä•', cell_overwrite_ok=True)
+    # dbConn = MySQLdb.connect(host="221.228.209.13", user="mob_DB", passwd="svb7Ml8+Oc4", db="mobcall", port=6301, charset="utf8")
+    # cursor = dbConn.cursor()
+    # gather(cursor, 'sms_status_report', proxyData)
+    # gather(cursor, 'sms_report_char', proxyData)
+    proxyData = {'fjdx':{0: 3, 2:1}, 'yzzy':{1:2}}
+    proxySums, ispSums, total = compute(proxyData)
+    printXls(table, style, proxyData, proxySums, ispSums, total)
+    file.save(r'C:\\Users\\xjt\\Desktop\\Áü≠‰ø°Êó•Êä•' + str(date) + '.xls')
+    # dbConn.commit()
+    # cursor.close()
+    # dbConn.close()
 
 
