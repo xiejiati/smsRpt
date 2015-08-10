@@ -52,9 +52,9 @@ def gather(cursor, database, date, proxyData):
 def gatherDays(cursor, database, proxyData, toDate, fromDate=''):
     #proxyData={'fjdx':{0: 1000, 2:100}}
     if fromDate == '':
-        t = time.strptime(toDate, '%Y-%m')
+        t = time.strptime(toDate, '%Y-%m-%d')
         y,m = t[0:2]
-        fromDate = str(datetime.date(y,m))+'-01'
+        fromDate = str(datetime.date(y,m, 1))
     sql = "select distinct channel  from "+ database +" where "+_withinDayCondPeriod("reqTime", fromDate, toDate)+";"
     cursor.execute(sql)
     results = cursor.fetchall()
@@ -112,9 +112,12 @@ def _tProxySums(proxyData):
     # }
     # tProxyData = {'fjdx':{0:6, 2:3}, 'yzzy':{1:8}, 'yw':{1:4}}
     charges = {
-        'fjdx':[[20, 0.6], 0.035],
-        'yzzy':[[10, 0.3], 0.036],
-        'yw':[[0, 0], 0.040]
+        'gzyd':[[1000000, 50000], 0.05],
+        'fjdx':[[0, 0], 0.036],
+        'yzzy':[[0, 0], 0.0399],
+        'yw':[[0, 0], 0.04],
+        'gzdx':[[250000, 14000], 0.06],
+        'jsyd':[[0, 0], 0.035]
         }
     proxySums = {}
     for key, value in charges.items():
@@ -252,33 +255,36 @@ def printXls(table, style, proxyData, proxySums, ispSums, total):
 
 
 if __name__ == '__main__':
+    startT = datetime.datetime.now()
     proxyData = {}
     tProxyData = {}
-    date = str(datetime.date.today() + datetime.timedelta(days =-1))
+    date = str(datetime.date.today() + datetime.timedelta(days =-2))
     file = xlwt.Workbook(encoding='utf-8')
     style = xlwt.easyxf('align: wrap on, vert centre, horiz center')
-    table = file.add_sheet('日报', cell_overwrite_ok=True)
-    table1 = file.add_sheet('1号至今', cell_overwrite_ok=True)
+    table = file.add_sheet(str(date)+'短信量', cell_overwrite_ok=True)
+    table1 = file.add_sheet('1号至'+str(date), cell_overwrite_ok=True)
     for i in range(255):
         table.col(i).width = 0x0d00 + 7
         table1.col(i).width = 0x0d00 + 7
-    # dbConn = MySQLdb.connect(host="221.228.209.13", user="mob_DB", passwd="svb7Ml8+Oc4", db="mobcall", port=6301, charset="utf8")
-    # cursor = dbConn.cursor()
-    # gather(cursor, 'sms_status_report', date, proxyData)
-    # gather(cursor, 'sms_report_char', date, proxyData)
-    proxyData = {'fjdx':{0: 3, 2:1}, 'yzzy':{1:2}}
+    dbConn = MySQLdb.connect(host="221.228.209.13", user="mob_DB", passwd="svb7Ml8+Oc4", db="mobcall", port=6301, charset="utf8")
+    cursor = dbConn.cursor()
+    gather(cursor, 'sms_status_report', date, proxyData)
+    gather(cursor, 'sms_report_char', date, proxyData)
+    #proxyData = {'fjdx':{0: 3, 2:1}, 'yzzy':{1:2}}
     proxySums, ispSums, total = compute(proxyData)
     printXls(table, style, proxyData, proxySums, ispSums, total)
 
-    #gatherDays(cursor, 'sms_status_report', tProxyData, date)
-    #gatherDays(cursor, 'sms_report_char', tProxyData, date)
-    tProxyData = {'fjdx':{0:6, 2:3}, 'yzzy':{1:12}, 'yw':{1:4}}
+    gatherDays(cursor, 'sms_status_report', tProxyData, date)
+    gatherDays(cursor, 'sms_report_char', tProxyData, date)
+    #tProxyData = {'fjdx':{0:6, 2:3}, 'yzzy':{1:12}, 'yw':{1:4}}
     tProxySums, tSums = tCompute(tProxyData)
     tPrint(table1, style, tProxySums, tSums)
 
-    file.save(r'C:\\Users\\xjt\\Desktop\\短信日报' + str(date) + '.xls')
-    # dbConn.commit()
-    # cursor.close()
-    # dbConn.close()
+    file.save(r'C:\\Users\\Administrator\\Desktop\\' + str(date) + '.xls')
+    dbConn.commit()
+    cursor.close()
+    dbConn.close()
+    endT = datetime.datetime.now()
+    print (endT-startT)
 
 
