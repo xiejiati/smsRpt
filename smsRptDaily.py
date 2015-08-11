@@ -261,8 +261,8 @@ if __name__ == '__main__':
     date = str(datetime.date.today() + datetime.timedelta(days =-2))
     file = xlwt.Workbook(encoding='utf-8')
     style = xlwt.easyxf('align: wrap on, vert centre, horiz center')
-    table = file.add_sheet(str(date)+'短信量', cell_overwrite_ok=True)
-    table1 = file.add_sheet('1号至'+str(date), cell_overwrite_ok=True)
+    table = file.add_sheet('短信日通报量', cell_overwrite_ok=True)
+    table1 = file.add_sheet('截止'+str(int(str(date)[8:]))+"日累计使用量", cell_overwrite_ok=True)
     for i in range(255):
         table.col(i).width = 0x0d00 + 7
         table1.col(i).width = 0x0d00 + 7
@@ -280,7 +280,7 @@ if __name__ == '__main__':
     tProxySums, tSums = tCompute(tProxyData)
     tPrint(table1, style, tProxySums, tSums)
 
-    file.save(r'C:\\Users\\Administrator\\Desktop\\' + str(date) + '.xls')
+    file.save(r'C:\\Users\\Administrator\\Desktop\\smsDaily\\' + str(date) + '.xls')
     dbConn.commit()
     cursor.close()
     dbConn.close()
